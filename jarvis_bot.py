@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.request import HTTPXRequest
 
 # ============================================
 # API KEYS (reads from environment on Render, uses defaults locally)
