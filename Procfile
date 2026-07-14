@@ -1,0 +1,1 @@
+web: gunicorn wsgi:run_health --bind 0.0.0.0:$PORT --worker-class uvicorn.workers.UvicornWorker --timeout 120
