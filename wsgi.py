@@ -1,6 +1,7 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
 import os
+import sys
+import subprocess
 
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -12,8 +13,13 @@ def app(environ, start_response):
     start_response('200 OK', [('Content-Type', 'text/plain')])
     return [b'Jarvis is online!']
 
-def run_bot():
+# Start the bot as a separate process
+import multiprocessing
+def start_bot():
     from jarvis_bot import main
     main()
 
-threading.Thread(target=run_bot, daemon=True).start()
+if __name__ == "__main__":
+    # Start bot in a separate process
+    bot_process = multiprocessing.Process(target=start_bot, daemon=True)
+    bot_process.start()
