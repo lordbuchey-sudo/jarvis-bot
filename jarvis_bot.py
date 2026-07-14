@@ -524,7 +524,7 @@ async def handle_csv_request(update: Update, context: ContextTypes.DEFAULT_TYPE)
     title = get_title(user_id)
     msg_lower = user_message.lower()
     await update.message.reply_text(f"📊 Generating CSV, {title}...")
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    # await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     csv_content = jarvis_think(user_id, f"Generate CSV for: {user_message}. Return ONLY raw CSV, no markdown.")
     csv_content = csv_content.strip()
     if csv_content.startswith("```"):
@@ -552,7 +552,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_size = document.file_size / 1024
     title = get_title(user_id)
     status_msg = await update.message.reply_text(f"📄 Analyzing {file_name}...", parse_mode='Markdown')
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    # await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     try:
         file = await document.get_file()
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as tmp:
@@ -610,7 +610,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     await update.message.reply_text(f"📸 Analyzing image, {title}...")
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    # await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
     try:
         from google import genai
@@ -660,7 +660,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     title = get_title(user_id)
     
     await update.message.reply_text(f"🎤 Transcribing, {title}...")
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    # await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
     try:
         voice = update.message.voice
@@ -708,7 +708,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     title = get_title(user_id)
     
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    # await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     msg_lower = user_message.lower().strip()
     
     time_only = ["time", "date", "what time is it", "what's the time", "current time", "today's date", "what day is it", "what day is today", "what is the time", "tell me the time"]
