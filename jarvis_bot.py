@@ -756,7 +756,8 @@ def main():
     
     load_memory_from_disk()
     
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    request = HTTPXRequest(connection_pool_size=8, read_timeout=30, write_timeout=30)
+    app = Application.builder().token(TELEGRAM_TOKEN).request(request).build()
     
     # Basic
     app.add_handler(CommandHandler("start", start))
@@ -765,6 +766,7 @@ def main():
     app.add_handler(CommandHandler("whoami", whoami_command))
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("forget", forget_command))
+    
     
     # Productivity
     app.add_handler(CommandHandler("remind", remind))

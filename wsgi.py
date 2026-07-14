@@ -20,7 +20,9 @@ from jarvis_bot import (
 )
 
 # Build application
-application = Application.builder().token(TELEGRAM_TOKEN).build()
+from telegram.request import HTTPXRequest
+request = HTTPXRequest(connection_pool_size=8, read_timeout=30, write_timeout=30)
+application = Application.builder().token(TELEGRAM_TOKEN).request(request).build()
 
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("help", help_command))
