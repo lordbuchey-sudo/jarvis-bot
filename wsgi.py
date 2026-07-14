@@ -1,14 +1,13 @@
 import json
 import os
 import sys
+import asyncio
 
-# Import your main bot file
 sys.path.insert(0, os.path.dirname(__file__))
 from jarvis_bot import TELEGRAM_TOKEN
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-# Build application using the handlers from jarvis_bot.py
 from jarvis_bot import (
     start, help_command, status_command, whoami_command, history_command, forget_command,
     remind, view_reminders, take_note, view_notes, calculate, search_web,
@@ -20,6 +19,7 @@ from jarvis_bot import (
     handle_message
 )
 
+# Build application
 application = Application.builder().token(TELEGRAM_TOKEN).build()
 
 application.add_handler(CommandHandler("start", start))
@@ -50,14 +50,22 @@ application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-application.initialize()
+# Initialize synchronously at startup
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+loop.run_until_complete(application.initialize())
 
 def app(environ, start_response):
     if environ['REQUEST_METHOD'] == 'POST' and environ.get('PATH_INFO') == '/webhook':
         content_length = int(environ.get('CONTENT_LENGTH', 0))
         body = environ['wsgi.input'].read(content_length)
-        update = Update.de_json(json.loads(body), application.bot)
-        application.process_update(update)
+        
+        async def process():
+            update = Update.de_json(json.loads(body), application.bot)
+            await application.process_update(update)
+        
+        loop.run_until_complete(process())
+        
         start_response('200 OK', [('Content-Type', 'text/plain')])
         return [b'OK']
     
