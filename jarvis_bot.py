@@ -731,14 +731,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_message = f"User said '{user_message}'. Elaborate on our last topic."; break
     
     add_to_memory(user_id, "user", user_message)
-    response = jarvis_think(user_id, user_message)
-    add_to_memory(user_id, "assistant", response)
     
-    if len(response) > 4000:
-        for i in range(0, len(response), 4000):
-            await update.message.reply_text(response[i:i+4000])
-    else:
-        await update.message.reply_text(response)
+    # Get AI response with longer timeout
+    try:
+        response = jarvis_think(user_id, user_message)
+        add_to_memory(user_id, "assistant", response)
+        
+        if len(response) > 4000:
+            for i in range(0, len(response), 4000):
+                await update.message.reply_text(response[i:i+4000], read_timeout=30, write_timeout=30)
+        else:
+            await update.message.reply_text(response, read_timeout=30, write_timeout=30)
+    except Exception as e:
+        await update.message.reply_text("⚠️ Response took too long. Please try again.")
 
 # ============================================
 # MAIN
@@ -756,7 +761,7 @@ def main():
     
     load_memory_from_disk()
     
-    request = HTTPXRequest(connection_pool_size=8, read_timeout=30, write_timeout=30)
+    request = HTTPXRequest(connection_pool_size=8, read_timeout=60, write_timeout=60, connect_timeout=60)
     app = Application.builder().token(TELEGRAM_TOKEN).request(request).build()
     
     # Basic

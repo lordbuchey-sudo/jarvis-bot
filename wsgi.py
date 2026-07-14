@@ -21,7 +21,7 @@ from jarvis_bot import (
 
 # Build application
 from telegram.request import HTTPXRequest
-request = HTTPXRequest(connection_pool_size=8, read_timeout=30, write_timeout=30)
+request = HTTPXRequest(connection_pool_size=8, read_timeout=60, write_timeout=60, connect_timeout=60)
 application = Application.builder().token(TELEGRAM_TOKEN).request(request).build()
 
 application.add_handler(CommandHandler("start", start))
