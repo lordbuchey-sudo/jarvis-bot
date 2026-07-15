@@ -113,7 +113,7 @@ def load_memory_from_disk():
         print(f"⚠️ Could not load memory: {e}")
 
 def get_title(user_id):
-    return user_preferences.get(user_id, {}).get("title", "Ma'am")
+    return user_preferences.get(user_id, {}).get("title", None)
 
 def get_name(user_id):
     return user_preferences.get(user_id, {}).get("name", "")
@@ -143,9 +143,12 @@ def build_system_prompt(user_id):
     elif title == "Ma'am":
         user_info = "The user is a LADY. Her title is 'Ma'am'. You don't know her name yet."
         title_rule = "CRITICAL: This user is a LADY. Call her 'Ma'am'. The word 'Sir' is FORBIDDEN."
+    elif title == "Sir":
+        user_info = "The user is a GENTLEMAN. His title is 'Sir'."
+        title_rule = "Address him as 'Sir'."
     else:
-        user_info = f"The user's title is '{title}'."
-        title_rule = f"Address the user as '{title}'."
+        user_info = "You don't know the user's gender or title yet. Stay neutral."
+        title_rule = "Be neutral and respectful. Don't use 'Sir' or 'Ma'am' unless the user tells you their preference."
     
     return f"""You are Jarvis, an elite AI assistant. Professional, witty, and highly capable.
 
