@@ -427,6 +427,14 @@ async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+async def fullreset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    conversation_memory[user_id] = []
+    user_preferences[user_id] = {}
+    user_data[user_id] = {"reminders": [], "notes": [], "documents_analyzed": 0, "joined": datetime.now().strftime("%Y-%m-%d %H:%M")}
+    save_memory_to_disk()
+    await update.message.reply_text("🗑 Complete reset. I now know nothing about you.", parse_mode='Markdown')    
+
 async def clear_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_data[user_id] = {"reminders": [], "notes": [], "documents_analyzed": 0, "joined": datetime.now().strftime("%Y-%m-%d %H:%M")}
@@ -601,6 +609,305 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'file_path' in locals(): os.unlink(file_path)
 
 # ============================================
+# PDF GENERATION
+# ============================================
+
+async def pdf_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Generate a PDF document"""
+    user_id = update.effective_user.id
+    title = get_title(user_id) or "there"
+    
+    if not context.args:
+        await update.message.reply_text(
+            "📄 *PDF Generator*\n\n"
+            "Usage: `/pdf invoice John Doe $149`\n"
+            "Usage: `/pdf report Monthly Sales Summary`\n"
+            "Usage: `/pdf letter Thank you for your purchase`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    doc_type = context.args[0].lower()
+    content = " ".join(context.args[1:])
+    
+    await update.message.reply_text(f"📄 Generating PDF, {title}...")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    
+    # Ask AI to generate the content
+    prompt = f"Generate a professional {doc_type} document. Content: {content}. Keep it concise and well-formatted."
+    pdf_content = jarvis_think(user_id, prompt)
+    
+    # Create PDF using reportlab (lightweight)
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        import io as io_module
+        
+        buffer = io_module.BytesIO()
+        c = canvas.Canvas(buffer, pagesize=letter)
+        
+        # Write content
+        y = 750
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(50, y, f"J.A.R.V.I.S. - {doc_type.upper()}")
+        y -= 30
+        
+        c.setFont("Helvetica", 10)
+        c.drawString(50, y, f"Date: {datetime.now().strftime('%B %d, %Y')}")
+        y -= 20
+        
+        c.setFont("Helvetica", 11)
+        for line in pdf_content.split('\n'):
+            if y < 50:
+                c.showPage()
+                c.setFont("Helvetica", 11)
+                y = 750
+            # Wrap long lines
+            while len(line) > 90:
+                c.drawString(50, y, line[:90])
+                y -= 15
+                line = line[90:]
+            c.drawString(50, y, line)
+            y -= 15
+        
+        c.save()
+        buffer.seek(0)
+        
+        filename = f"{doc_type}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        await update.message.reply_document(
+            document=buffer,
+            filename=filename,
+            caption=f"📄 Here's your {doc_type}, {title}!"
+        )
+        
+    except ImportError:
+        await update.message.reply_text("📄 PDF support: `pip install reportlab`")
+    except Exception as e:
+        await update.message.reply_text(f"❌ PDF error: {str(e)[:200]}")
+
+# ============================================
+# TRANSLATION
+# ============================================
+
+async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Translate text to any language"""
+    user_id = update.effective_user.id
+    title = get_title(user_id) or "there"
+    
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "🌍 *Translator*\n\n"
+            "Usage: `/translate french Hello, how are you?`\n"
+            "Usage: `/translate spanish Good morning`\n"
+            "Usage: `/translate japanese Thank you`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    target_lang = context.args[0].capitalize()
+    text = " ".join(context.args[1:])
+    
+    await update.message.reply_text(f"🌍 Translating to {target_lang}...")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    
+    prompt = f"Translate the following text to {target_lang}. Return ONLY the translation, nothing else:\n\n{text}"
+    translation = jarvis_think(user_id, prompt)
+    
+    await update.message.reply_text(
+        f"🌍 *Translation ({target_lang})*\n\n"
+        f"📝 Original: _{text}_\n"
+        f"🔄 Translated: *{translation}*",
+        parse_mode='Markdown'
+    )
+    
+# ============================================
+# YOUTUBE VIDEO SUMMARIZER
+# ============================================
+
+async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Detect YouTube links and summarize the video"""
+    user_id = update.effective_user.id
+    user_message = update.message.text
+    title = get_title(user_id) or "there"
+    
+    # Check if message contains a YouTube link
+    youtube_patterns = [
+        r'youtube\.com/watch\?v=([a-zA-Z0-9_-]+)',
+        r'youtu\.be/([a-zA-Z0-9_-]+)',
+        r'youtube\.com/shorts/([a-zA-Z0-9_-]+)'
+    ]
+    
+    video_id = None
+    for pattern in youtube_patterns:
+        match = re.search(pattern, user_message)
+        if match:
+            video_id = match.group(1)
+            break
+    
+    if not video_id:
+        return False  # Not a YouTube link
+    
+    await update.message.reply_text(f"📺 Analyzing YouTube video, {title}...")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    
+    try:
+        # Get video info using oEmbed (no API key needed!)
+        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+        response = requests.get(oembed_url, timeout=10)
+        
+        if response.status_code == 200:
+            video_data = response.json()
+            video_title = video_data.get('title', 'Unknown Title')
+            author = video_data.get('author_name', 'Unknown Creator')
+        else:
+            video_title = "YouTube Video"
+            author = "Unknown"
+        
+        # Ask AI to summarize based on the title and context
+        prompt = f"""A user wants a summary of this YouTube video:
+        Title: {video_title}
+        Creator: {author}
+        URL: https://www.youtube.com/watch?v={video_id}
+        
+        Based on the title, provide:
+        1. What this video is likely about (2-3 sentences)
+        2. Key points the video probably covers (3-5 bullet points)
+        3. Who would benefit from watching this
+        4. Estimated time saved by reading this summary
+        
+        Be honest that this is a title-based summary. Suggest they can share more context for a better summary."""
+        
+        summary = jarvis_think(user_id, prompt)
+        
+        await update.message.reply_text(
+            f"📺 *YouTube Summary*\n\n"
+            f"🎬 *{video_title}*\n"
+            f"👤 {author}\n\n"
+            f"{summary}\n\n"
+            f"💡 *Tip:* Tell me more about the video for a better summary!\n"
+            f"Example: 'This video is about Python tutorials for beginners'",
+            parse_mode='Markdown'
+        )
+        
+        add_to_memory(user_id, "user", user_message)
+        add_to_memory(user_id, "assistant", f"Summarized YouTube video: {video_title}")
+        return True
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Could not fetch video info. Try pasting the video title instead.")
+        return True  # Still handled
+
+async def summarize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Summarize any YouTube video by title/topic"""
+    user_id = update.effective_user.id
+    title = get_title(user_id) or "there"
+    
+    if not context.args:
+        await update.message.reply_text(
+            "📺 *YouTube Summarizer*\n\n"
+            "Send me a YouTube link OR use:\n"
+            "`/summarize Video title or topic`\n\n"
+            "Example: `/summarize Python tutorial for beginners`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    topic = " ".join(context.args)
+    
+    await update.message.reply_text(f"📺 Summarizing '{topic}'...")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    
+    prompt = f"Provide a helpful summary about this YouTube video topic: '{topic}'. Include what viewers can expect to learn, key takeaways, and who this content is for."
+    
+    summary = jarvis_think(user_id, prompt)
+    
+    await update.message.reply_text(
+        f"📺 *Video Summary: {topic}*\n\n{summary}",
+        parse_mode='Markdown'
+    )
+
+# ============================================
+# ROAST ME / PROFILE ANALYZER
+# ============================================
+
+async def roast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Roast or analyze based on user's chat history"""
+    user_id = update.effective_user.id
+    title = get_title(user_id) or "friend"
+    
+    # Get user's conversation history
+    history = get_recent_memory(user_id, 15)
+    
+    if not history or history == "New conversation":
+        await update.message.reply_text(
+            "🔍 *Not enough data to roast you yet!*\n\n"
+            "Chat with me more, then try again.\n"
+            "Or send a self-description: `/roast I'm a 25-year-old software developer who loves pizza and procrastination`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    await update.message.reply_text(f"🔥 Analyzing your personality, {title}...")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    
+    # If user provided self-description in the command
+    extra_info = " ".join(context.args) if context.args else ""
+    
+    prompt = f"""Based on this conversation history, create a FUNNY and WITTY roast/analysis of the user. 
+    Be humorous but NOT mean. Include:
+    
+    1. 🔥 A funny roast (1-2 sentences, playful)
+    2. 🧠 Personality traits you detect (3-4)
+    3. 💼 Career they might have
+    4. 🎯 Hidden talent they probably have
+    5. ⭐ Overall rating (out of 10)
+    
+    Extra info from user: {extra_info}
+    
+    Conversation history:
+    {history}
+    
+    Make it funny and shareable. Use emojis. End with something encouraging."""
+    
+    roast = jarvis_think(user_id, prompt)
+    
+    await update.message.reply_text(
+        f"🔥 *Roast Mode Activated*\n\n{roast}\n\n"
+        f"_Send this to a friend! They can try too: just chat with me then type /roast_",
+        parse_mode='Markdown'
+    )
+
+async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """More serious personality analysis"""
+    user_id = update.effective_user.id
+    title = get_title(user_id) or "friend"
+    
+    history = get_recent_memory(user_id, 15)
+    
+    if not history or history == "New conversation":
+        await update.message.reply_text("🔍 Chat more first, then I can analyze you!")
+        return
+    
+    await update.message.reply_text(f"🧠 Analyzing, {title}...")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    
+    prompt = f"""Based on this conversation history, provide a PROFESSIONAL personality analysis:
+    
+    1. MBTI type guess (e.g., INTJ, ENFP)
+    2. Communication style
+    3. Strengths (3-4)
+    4. Growth areas (2-3, kindly worded)
+    5. Ideal career matches
+    
+    Conversation:
+    {history}"""
+    
+    analysis = jarvis_think(user_id, prompt)
+    
+    await update.message.reply_text(f"🧠 *Personality Analysis*\n\n{analysis}", parse_mode='Markdown')
+
+    
+# ============================================
 # IMAGE ANALYSIS (UPDATED — uses google-genai)
 # ============================================
 
@@ -718,6 +1025,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg_lower in time_only:
         await current_time(update, context); return
     
+    # YouTube link detection
+    if await handle_youtube_link(update, context):
+        return
+    
     csv_triggers = ["give me a csv", "create a csv", "generate a csv", "make a csv", "csv format", "csv file", "excel file", "spreadsheet file", "generate csv", "create csv", "make csv", "send me a csv", "download csv", ".csv"]
     if any(t in msg_lower for t in csv_triggers):
         await handle_csv_request(update, context); return
@@ -768,12 +1079,16 @@ def main():
     app = Application.builder().token(TELEGRAM_TOKEN).request(request).build()
     
     # Basic
+       # Basic
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("whoami", whoami_command))
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("forget", forget_command))
+    app.add_handler(CommandHandler("fullreset", fullreset_command)) 
+    app.add_handler(CommandHandler("clear", clear_data))  
+
     
     
     # Productivity
@@ -800,6 +1115,11 @@ def main():
     # Admin
     app.add_handler(CommandHandler("broadcast", admin_broadcast))
     app.add_handler(CommandHandler("users", admin_users))
+
+    # Fun & Viral
+    app.add_handler(CommandHandler("roast", roast_command))
+    app.add_handler(CommandHandler("analyze", analyze_command))
+    app.add_handler(CommandHandler("summarize", summarize_command))
     
     # Files & Media
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
