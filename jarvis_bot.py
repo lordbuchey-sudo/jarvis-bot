@@ -733,7 +733,7 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Check if message contains a YouTube link
     youtube_patterns = [
         r'youtube\.com/watch\?v=([a-zA-Z0-9_-]+)',
-        r'youtu\.be/([a-zA-Z0-9_-]+)',
+        r'youtu\.be/([a-zA-Z0-9_\-]+)',
         r'youtube\.com/shorts/([a-zA-Z0-9_-]+)'
     ]
     
