@@ -730,11 +730,9 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_message = update.message.text
     title = get_title(user_id) or "there"
     
-    # Check if message contains a YouTube link
+        # Check if message contains a YouTube link
     youtube_patterns = [
-        r'youtube\.com/watch\?v=([a-zA-Z0-9_-]+)',
-        r'youtu\.be/([a-zA-Z0-9_\-]+)',
-        r'youtube\.com/shorts/([a-zA-Z0-9_-]+)'
+        r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)([a-zA-Z0-9_\-]+)'
     ]
     
     video_id = None
@@ -742,6 +740,11 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         match = re.search(pattern, user_message)
         if match:
             video_id = match.group(1)
+            # Strip any extra parameters after the ID
+            if '?' in video_id:
+                video_id = video_id.split('?')[0]
+            if '&' in video_id:
+                video_id = video_id.split('&')[0]
             break
     
     if not video_id:
@@ -1086,7 +1089,7 @@ def main():
     app.add_handler(CommandHandler("whoami", whoami_command))
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("forget", forget_command))
-    app.add_handler(CommandHandler("fullreset", fullreset_command)) 
+    app.add_handler(CommandHandler("fullreset", fullreset_command))
     app.add_handler(CommandHandler("clear", clear_data))  
 
     
