@@ -730,102 +730,88 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_message = update.message.text
     title = get_title(user_id) or "there"
     
-        # Check if message contains a YouTube link
-    youtube_patterns = [
-        r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)([a-zA-Z0-9_\-]+)'
+    # Extract video ID from any YouTube URL format
+    patterns = [
+        r'youtube\.com/watch\?v=([a-zA-Z0-9_\-]+)',
+        r'youtu\.be/([a-zA-Z0-9_\-]+)',
+        r'youtube\.com/shorts/([a-zA-Z0-9_\-]+)'
     ]
     
     video_id = None
-    for pattern in youtube_patterns:
+    for pattern in patterns:
         match = re.search(pattern, user_message)
         if match:
             video_id = match.group(1)
-            # Strip any extra parameters after the ID
-            if '?' in video_id:
-                video_id = video_id.split('?')[0]
-            if '&' in video_id:
-                video_id = video_id.split('&')[0]
+            # Clean up: remove any trailing parameters
+            video_id = video_id.split('?')[0].split('&')[0].split('#')[0]
             break
     
     if not video_id:
-        return False  # Not a YouTube link
+        return False
     
     await update.message.reply_text(f"📺 Analyzing YouTube video, {title}...")
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
-    try:
-        # Get video info using oEmbed (no API key needed!)
-        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
-        response = requests.get(oembed_url, timeout=10)
-        
-        if response.status_code == 200:
-            video_data = response.json()
-            video_title = video_data.get('title', 'Unknown Title')
-            author = video_data.get('author_name', 'Unknown Creator')
-        else:
-            video_title = "YouTube Video"
-            author = "Unknown"
-        
-        # Ask AI to summarize based on the title and context
-        prompt = f"""A user wants a summary of this YouTube video:
-        Title: {video_title}
-        Creator: {author}
-        URL: https://www.youtube.com/watch?v={video_id}
-        
-        Based on the title, provide:
-        1. What this video is likely about (2-3 sentences)
-        2. Key points the video probably covers (3-5 bullet points)
-        3. Who would benefit from watching this
-        4. Estimated time saved by reading this summary
-        
-        Be honest that this is a title-based summary. Suggest they can share more context for a better summary."""
-        
-        summary = jarvis_think(user_id, prompt)
-        
-        await update.message.reply_text(
-            f"📺 *YouTube Summary*\n\n"
-            f"🎬 *{video_title}*\n"
-            f"👤 {author}\n\n"
-            f"{summary}\n\n"
-            f"💡 *Tip:* Tell me more about the video for a better summary!\n"
-            f"Example: 'This video is about Python tutorials for beginners'",
-            parse_mode='Markdown'
-        )
-        
-        add_to_memory(user_id, "user", user_message)
-        add_to_memory(user_id, "assistant", f"Summarized YouTube video: {video_title}")
-        return True
-        
-    except Exception as e:
-        await update.message.reply_text(f"❌ Could not fetch video info. Try pasting the video title instead.")
-        return True  # Still handled
+    # Ask AI directly (no external API needed)
+    prompt = f"""A user shared this YouTube video link: https://www.youtube.com/watch?v={video_id}
+    
+    Respond in a helpful, engaging way:
+    1. Acknowledge the video was shared
+    2. Give a fun, clever response about what the video MIGHT be about based on the ID
+    3. Suggest the user tell you the video title or topic for a detailed summary
+    
+    Keep it light and conversational. Don't pretend to know the actual video content."""
+    
+    response = jarvis_think(user_id, prompt)
+    
+    await update.message.reply_text(
+        f"📺 *YouTube Video Shared*\n\n"
+        f"🔗 youtube.com/watch?v={video_id}\n\n"
+        f"{response}\n\n"
+        f"💡 *Want a real summary?* Tell me: 'This video is about [topic]' or use `/summarize [topic]`",
+        parse_mode='Markdown',
+        disable_web_page_preview=True
+    )
+    
+    add_to_memory(user_id, "user", user_message)
+    add_to_memory(user_id, "assistant", f"YouTube video {video_id} shared")
+    return True
+
 
 async def summarize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Summarize any YouTube video by title/topic"""
+    """Summarize a YouTube video by title/topic"""
     user_id = update.effective_user.id
     title = get_title(user_id) or "there"
     
     if not context.args:
         await update.message.reply_text(
             "📺 *YouTube Summarizer*\n\n"
-            "Send me a YouTube link OR use:\n"
-            "`/summarize Video title or topic`\n\n"
-            "Example: `/summarize Python tutorial for beginners`",
+            "Send me a YouTube link OR tell me the topic:\n"
+            "`/summarize Python tutorial for beginners`\n\n"
+            "You can also just paste a YouTube link!",
             parse_mode='Markdown'
         )
         return
     
     topic = " ".join(context.args)
     
-    await update.message.reply_text(f"📺 Summarizing '{topic}'...")
+    await update.message.reply_text(f"📺 Summarizing: _{topic}_...")
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
-    prompt = f"Provide a helpful summary about this YouTube video topic: '{topic}'. Include what viewers can expect to learn, key takeaways, and who this content is for."
+    prompt = f"""Provide a comprehensive summary about this video topic: '{topic}'
+    
+    Include:
+    1. What viewers can expect to learn
+    2. 3-5 key takeaways
+    3. Who this content is best for
+    4. Why this topic matters
+    
+    Format it nicely with emojis and bullet points."""
     
     summary = jarvis_think(user_id, prompt)
     
     await update.message.reply_text(
-        f"📺 *Video Summary: {topic}*\n\n{summary}",
+        f"📺 *Summary: {topic}*\n\n{summary}",
         parse_mode='Markdown'
     )
 
